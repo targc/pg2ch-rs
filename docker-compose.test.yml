@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pg2ch
+      POSTGRES_PASSWORD: pg2ch
+      POSTGRES_DB: pg2ch
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pg2ch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"   # HTTP API
+      - "9000:9000"   # native protocol
+    environment:
+      CLICKHOUSE_USER: pg2ch
+      CLICKHOUSE_PASSWORD: pg2ch
+      CLICKHOUSE_DB: pg2ch
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

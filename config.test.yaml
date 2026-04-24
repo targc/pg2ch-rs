@@ -1,0 +1,25 @@
+interval_ms: 3000
+query_batch_size: 1000
+upsert_batch_size: 1000
+
+source:
+  connection_url: postgres://pg2ch:pg2ch@localhost:5432/pg2ch
+
+destination:
+  connection_url: clickhouse://pg2ch:pg2ch@localhost:8123/pg2ch
+
+tables:
+  - source: users
+    cursors:
+      - updated_at
+      - id
+
+  - source: orders
+    cursors:
+      - updated_at
+      - id
+
+  - source: transactions
+    cursors:
+      - created_at
+      - id
