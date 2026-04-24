@@ -1,7 +1,9 @@
 use crate::error::AppError;
 use rust_decimal::Decimal;
+use rustls::ClientConfig;
 use serde_json::{Map, Value};
 use tokio_postgres::{types::Type, Client, NoTls, Row};
+use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::warn;
 
 pub struct ColumnInfo {
@@ -18,12 +20,17 @@ pub struct PgClient {
 
 impl PgClient {
     pub async fn connect(url: &str) -> Result<Self, AppError> {
-        let (client, connection) = tokio_postgres::connect(url, NoTls).await?;
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                tracing::error!("postgres connection error: {}", e);
-            }
-        });
+        let ssl = url.contains("sslmode=") && !url.contains("sslmode=disable");
+        let client = if ssl {
+            let tls = MakeRustlsConnect::new(build_tls_config());
+            let (client, conn) = tokio_postgres::connect(url, tls).await?;
+            tokio::spawn(async move { if let Err(e) = conn.await { tracing::error!("{}", e); } });
+            client
+        } else {
+            let (client, conn) = tokio_postgres::connect(url, NoTls).await?;
+            tokio::spawn(async move { if let Err(e) = conn.await { tracing::error!("{}", e); } });
+            client
+        };
         Ok(Self { client })
     }
 
@@ -80,6 +87,17 @@ impl PgClient {
         let rows = self.client.query(&sql, &[]).await?;
         Ok(rows.iter().map(row_to_map).collect())
     }
+}
+
+fn build_tls_config() -> ClientConfig {
+    let result = rustls_native_certs::load_native_certs();
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in result.certs {
+        roots.add(cert).ok();
+    }
+    ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth()
 }
 
 fn format_pg_value(v: &Value) -> String {
