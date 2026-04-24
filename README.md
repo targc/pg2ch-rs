@@ -53,6 +53,8 @@ cargo run -- config.test.yaml
 - [Running](docs/running.md) — all the ways to run (file, stdin, pipe, Docker)
 - [Config Reference](docs/config.md) — all config fields explained with examples
 - [Stdin & TTY](docs/stdin-and-tty.md) — how piped config and terminal detection work
+- [Error Handling](docs/error-handling.md) — what happens on insert failure, stuck tables, fatal errors
+- [Concurrency](docs/concurrency.md) — how tables sync in parallel within each tick
 
 ---
 
