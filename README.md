@@ -13,6 +13,17 @@ Syncs PostgreSQL tables to ClickHouse using cursor-based incremental loading.
 
 ## Quick Start
 
+**From a file:**
+```bash
+cargo run -- config.test.yaml
+```
+
+**Piped inline:**
+```bash
+cat config.test.yaml | cargo run
+```
+
+**Heredoc inline:**
 ```bash
 cargo run << 'EOF'
 interval_ms: 5000
@@ -26,6 +37,12 @@ tables:
   - source: users
     cursors: [updated_at, id]
 EOF
+```
+
+**Local test environment** (PostgreSQL + ClickHouse with mock data):
+```bash
+docker compose -f docker-compose.test.yml up -d
+cargo run -- config.test.yaml
 ```
 
 ---
@@ -73,6 +90,6 @@ EOF
 
 ## Limitations
 
-- No TLS for PostgreSQL (plaintext only)
+- PostgreSQL SSL: add `?sslmode=require` (encrypt) or `?sslmode=verify-full` (encrypt + verify cert) to the connection URL
 - Schema changes after table creation are not applied automatically
 - Array columns are not supported (synced as `null`)
