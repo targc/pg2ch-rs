@@ -23,11 +23,18 @@ pub struct TableConfig {
     pub source: String,
     pub dest: Option<String>,
     pub cursors: Vec<String>,
+    /// ClickHouse ORDER BY key (deduplication key for ReplacingMergeTree).
+    /// Defaults to `cursors` if not set.
+    pub primary_key: Option<Vec<String>>,
 }
 
 impl TableConfig {
     pub fn dest_name(&self) -> &str {
         self.dest.as_deref().unwrap_or(&self.source)
+    }
+
+    pub fn ch_order_by(&self) -> &[String] {
+        self.primary_key.as_deref().unwrap_or(&self.cursors)
     }
 }
 

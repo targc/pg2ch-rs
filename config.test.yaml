@@ -10,16 +10,13 @@ destination:
 
 tables:
   - source: users
-    cursors:
-      - updated_at
-      - id
+    cursors: [updated_at, id]
+    primary_key: [id]
 
   - source: orders
-    cursors:
-      - updated_at
-      - id
+    cursors: [updated_at, id]
+    primary_key: [id]
 
   - source: transactions
-    cursors:
-      - created_at
-      - id
+    cursors: [created_at, id]
+    primary_key: [id]

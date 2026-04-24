@@ -50,7 +50,7 @@ impl<'a> SchemaManager<'a> {
             ))
             .collect();
 
-        let order_by = table.cursors.iter()
+        let order_by = table.ch_order_by().iter()
             .map(|c| format!("`{}`", c))
             .collect::<Vec<_>>()
             .join(", ");
