@@ -23,6 +23,7 @@ async fn main() -> Result<(), AppError> {
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_ansi(false)
         .init();
 
     let config = config::load_from_arg()?;
