@@ -25,7 +25,7 @@ async fn main() -> Result<(), AppError> {
         )
         .init();
 
-    let config = config::load("config.yaml")?;
+    let config = config::load_from_arg()?;
 
     info!("connecting to PostgreSQL");
     let pg = PgClient::connect(&config.source.connection_url).await?;

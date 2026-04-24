@@ -2,77 +2,42 @@
 
 Syncs PostgreSQL tables to ClickHouse using cursor-based incremental loading.
 
-## How It Works
+- Automatically creates ClickHouse tables from PostgreSQL schemas
+- Tracks sync position with cursor columns (e.g. `updated_at`, `id`)
+- Recovers cursor state from ClickHouse on restart — no state files needed
+- Syncs all tables concurrently on each tick
 
-1. On startup, creates missing ClickHouse tables by introspecting PostgreSQL schemas.
-2. Initializes cursors from the last record in each ClickHouse table (full load if empty).
-3. Runs a ticker loop — each tick queries new rows from PostgreSQL and upserts them into ClickHouse.
+> **Note:** Hard deletes are not captured. Use soft deletes (`deleted_at`) if you need deletion tracking.
 
-Cursor state is in-memory. ClickHouse is the source of truth on restart — no state files needed.
+---
 
-> **Note:** Cursor-based sync does not capture hard deletes. Use soft deletes (`deleted_at`) if you need deletion tracking.
-
-## Setup
-
-### 1. Create config
+## Quick Start
 
 ```bash
-cp config.example.yaml config.yaml
-```
-
-Edit `config.yaml`:
-
-```yaml
-interval_ms: 5000        # wait between sync cycles (after current finishes)
-query_batch_size: 1000   # rows per SELECT from PostgreSQL
-upsert_batch_size: 1000  # rows per INSERT into ClickHouse
-
+cargo run << 'EOF'
+interval_ms: 5000
+query_batch_size: 1000
+upsert_batch_size: 1000
 source:
   connection_url: postgres://user:pass@localhost/mydb
-
 destination:
   connection_url: clickhouse://default:@localhost/mydb
-
 tables:
-  - source: users          # PostgreSQL table name
-    dest: users            # ClickHouse table name (optional, defaults to source)
-    cursors:
-      - updated_at         # cursor columns, ordered — used for WHERE and ORDER BY
-      - id
+  - source: users
+    cursors: [updated_at, id]
+EOF
 ```
 
-### 2. Run
+---
 
-**Binary:**
-```bash
-cargo build --release
-./target/release/pg2ch
-```
+## Docs
 
-**Docker:**
-```bash
-docker build -t pg2ch .
-docker run -v $(pwd)/config.yaml:/config.yaml pg2ch
-```
+- [How It Works](docs/how-it-works.md) — sync loop, cursors, batching explained simply
+- [Running](docs/running.md) — all the ways to run (file, stdin, pipe, Docker)
+- [Config Reference](docs/config.md) — all config fields explained with examples
+- [Stdin & TTY](docs/stdin-and-tty.md) — how piped config and terminal detection work
 
-Log level is controlled via `RUST_LOG` (default: `info`):
-```bash
-RUST_LOG=debug ./target/release/pg2ch
-```
-
-## Cursor Strategy
-
-Each table must have one or more cursor columns (typically `updated_at` + `id`). On each tick:
-
-```sql
--- PostgreSQL fetch
-SELECT * FROM users
-WHERE (updated_at, id) > ($last_updated_at, $last_id)
-ORDER BY updated_at, id
-LIMIT 1000
-```
-
-The ClickHouse table is created with `ReplacingMergeTree` ordered by the cursor columns for deduplication.
+---
 
 ## Type Mapping
 
@@ -92,18 +57,22 @@ The ClickHouse table is created with `ReplacingMergeTree` ordered by the cursor 
 | `_type` (array)       | `Array(T)`              |
 | nullable column       | `Nullable(T)`           |
 
+---
+
 ## Error Handling
 
-| Scenario                    | Behavior                                      |
-|-----------------------------|-----------------------------------------------|
-| Config / connection failure | Fatal — process exits (let orchestrator restart) |
-| Schema creation fails       | Fatal                                         |
-| Cursor missing at runtime   | Fatal                                         |
-| PostgreSQL fetch fails      | Log error, skip table this tick               |
-| ClickHouse insert fails     | Log error, skip table this tick (cursor not advanced, retried next tick) |
+| Scenario                  | Behavior |
+|---------------------------|----------|
+| Config / connection error | Fatal — process exits |
+| Schema creation fails     | Fatal — process exits |
+| Cursor missing at runtime | Fatal — process exits (let orchestrator restart) |
+| PostgreSQL fetch fails    | Log error, skip table this tick |
+| ClickHouse insert fails   | Log error, skip table this tick; cursor not advanced, retried next tick |
+
+---
 
 ## Limitations
 
-- No TLS support for PostgreSQL connections (plaintext only in current build).
-- Hard deletes in PostgreSQL are not replicated — use soft deletes.
-- Array column values are not supported (returned as `null`).
+- No TLS for PostgreSQL (plaintext only)
+- Schema changes after table creation are not applied automatically
+- Array columns are not supported (synced as `null`)
