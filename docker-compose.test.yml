@@ -24,8 +24,11 @@ services:
       CLICKHOUSE_USER: pg2ch
       CLICKHOUSE_PASSWORD: pg2ch
       CLICKHOUSE_DB: pg2ch
+    security_opt:
+      - seccomp:unconfined  # suppresses get_mempolicy warnings
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
