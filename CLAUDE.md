@@ -17,6 +17,6 @@ plans/
 ```
 
 ### Conventions
-- **`REQUIREMENTS.md`** is the index of each plan — read it first to understand the plan's scope and goal.
+- **`REQUIREMENTS.md`** is the index of each plan — read it first. It links to all other docs in the plan.
 - Plans are **ordered by prefix** (`00001`, `00002`, ...). Implement in order.
 - Each plan is self-contained: its own requirements, architecture, and structure docs.

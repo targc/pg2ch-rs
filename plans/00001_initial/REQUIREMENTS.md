@@ -2,6 +2,12 @@
 
 A containerized Rust service that syncs PostgreSQL tables to ClickHouse using micro-batch cursor-based incremental loading.
 
+## Plan Docs
+
+- [System Architecture](./SYSTEM_ARCHITECTURE.md) — modules, components, and their responsibilities
+- [System Flow](./SYSTEM_FLOW.md) — startup sequence, ticker loop, per-table ETL flow with diagrams
+- [Code Project Structure](./CODE_PROJECT_STRUCTURE.md) — file layout, key types, dependencies, `main.rs` skeleton
+
 ## How It Works
 
 1. **Schema sync** — on startup, reads source table schemas and auto-creates missing ClickHouse tables (with mapped column types).
