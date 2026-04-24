@@ -19,11 +19,23 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    // Send our logs to stderr. Redirect stdout → /dev/null so any binary output
+    // from the native TCP library doesn't leak into the log stream.
+    #[cfg(unix)]
+    unsafe {
+        let devnull = libc::open(b"/dev/null\0".as_ptr() as *const libc::c_char, libc::O_WRONLY);
+        if devnull >= 0 {
+            libc::dup2(devnull, libc::STDOUT_FILENO);
+            libc::close(devnull);
+        }
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .with_ansi(false)
+        .with_writer(std::io::stderr)
         .init();
 
     let config = config::load_from_arg()?;

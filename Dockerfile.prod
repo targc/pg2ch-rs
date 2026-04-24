@@ -1,8 +1,12 @@
 ## Stage 1 — build
-FROM rust:1.90-slim AS builder
+FROM rust:1.90-alpine AS builder
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y binutils pkg-config libssl-dev g++ && rm -rf /var/lib/apt/lists/*
+# musl-dev: C bindings; openssl-*: static OpenSSL (no runtime dep); g++: cityhash-sys C++
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static g++ binutils pkgconf
+
+# Static-link OpenSSL so the runtime image needs none of it
+ENV OPENSSL_STATIC=1
 
 # Cache dependencies before copying source
 COPY Cargo.toml Cargo.lock ./
@@ -14,18 +18,18 @@ RUN rm -rf src
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
-# Strip any remaining debug info and metadata (belt-and-suspenders on top of Cargo profile)
+# Strip debug info
 RUN strip --strip-all /app/target/release/app
 
 ## Stage 2 — minimal runtime
-FROM debian:bookworm-slim
+FROM alpine:3
 
-RUN apt-get update && apt-get install -y --no-install-recommends libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/target/release/app /app.bin
 
 # Run as non-root
-RUN useradd -r -s /bin/false nonroot
+RUN addgroup -S nonroot && adduser -S -G nonroot nonroot
 USER nonroot:nonroot
 
 ENTRYPOINT ["/app.bin"]
