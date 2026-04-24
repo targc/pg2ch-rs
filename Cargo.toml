@@ -3,6 +3,10 @@ name = "pg2ch"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
 [dependencies]
 tokio              = { version = "1", features = ["full"] }
 serde              = { version = "1", features = ["derive"] }
@@ -27,3 +31,10 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid   = { version = "1", features = ["serde"] }
 url    = "2"
 libc   = "0.2"
+
+[profile.release]
+opt-level     = 3       # max optimization
+lto           = true    # link-time optimization — merges code across crates
+codegen-units = 1       # single codegen unit for better optimization + harder to analyze
+panic         = "abort" # no unwinding machinery in binary
+strip         = "symbols" # remove symbol names
