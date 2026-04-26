@@ -116,7 +116,9 @@ impl ChClient {
         let row = block.rows().next().unwrap();
         let values = cursor_cols.iter()
             .map(|c| {
-                row.get::<String, _>(c.as_str())
+                row.get::<Option<String>, _>(c.as_str())
+                    .ok()
+                    .flatten()
                     .map(JsonValue::String)
                     .unwrap_or(JsonValue::Null)
             })

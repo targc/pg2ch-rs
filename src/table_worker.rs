@@ -5,10 +5,7 @@ use tokio::sync::Mutex;
 use tracing::{error, info};
 
 use crate::{
-    ch_client::ChClient,
-    config::TableConfig,
-    cursor_store::CursorStore,
-    error::AppError,
+    ch_client::ChClient, config::TableConfig, cursor_store::CursorStore, error::AppError,
     pg_client::PgClient,
 };
 
@@ -25,18 +22,23 @@ impl TableWorker {
     pub async fn run(&self) -> Result<(), AppError> {
         let table = &self.table;
 
-        loop {
-            let cursor_values = {
-                let store = self.cursors.lock().await;
-                store.get(&table.source)?.clone()
-            };
+        let mut cursor_values = {
+            let store = self.cursors.lock().await;
+            store.get(&table.source)?.clone()
+        };
+        info!("syncing, table: {}, cursor: {:?}", table.dest_name(), cursor_values);
 
-            let rows = match self.pg.fetch_batch(
-                &table.source,
-                &table.cursors,
-                &cursor_values,
-                self.query_batch_size,
-            ).await {
+        loop {
+            let rows = match self
+                .pg
+                .fetch_batch(
+                    &table.source,
+                    &table.cursors,
+                    &cursor_values,
+                    self.query_batch_size,
+                )
+                .await
+            {
                 Ok(r) => r,
                 Err(e) => {
                     error!("failed to fetch batch from {}: {}", table.source, e);
@@ -59,13 +61,15 @@ impl TableWorker {
 
             // Advance cursor to last row's values
             let last_row = rows.last().unwrap();
-            let new_cursor: Vec<Value> = table.cursors.iter()
+            cursor_values = table
+                .cursors
+                .iter()
                 .map(|c| last_row.get(c).cloned().unwrap_or(Value::Null))
                 .collect();
 
             {
                 let mut store = self.cursors.lock().await;
-                store.set(&table.source, new_cursor);
+                store.set(&table.source, cursor_values.clone());
             }
 
             info!("synced {} rows from {}", row_count, table.source);
