@@ -78,6 +78,27 @@ impl ChClient {
         Ok(block.row_count() > 0)
     }
 
+    pub async fn get_columns(&self, table: &str) -> Result<Vec<String>, AppError> {
+        let sql = format!(
+            "SELECT name FROM system.columns WHERE database = '{}' AND table = '{}' ORDER BY position",
+            escape(&self.database),
+            escape(table),
+        );
+        let block = self.pool
+            .get_handle()
+            .await
+            .map_err(|e| AppError::Clickhouse(e.to_string()))?
+            .query(&sql)
+            .fetch_all()
+            .await
+            .map_err(|e| AppError::Clickhouse(e.to_string()))?;
+
+        let names = block.rows()
+            .filter_map(|row| row.get::<String, _>("name").ok())
+            .collect();
+        Ok(names)
+    }
+
     pub async fn fetch_last_cursor(
         &self,
         table: &str,

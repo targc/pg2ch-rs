@@ -5,7 +5,8 @@ use crate::{
     pg_client::PgClient,
     type_map::pg_to_ch_type,
 };
-use tracing::info;
+use std::collections::HashSet;
+use tracing::{info, warn};
 
 pub struct SchemaManager<'a> {
     pg: &'a PgClient,
@@ -28,8 +29,7 @@ impl<'a> SchemaManager<'a> {
         let dest = table.dest_name();
 
         if self.ch.table_exists(dest).await? {
-            info!("table {} already exists in ClickHouse, skipping", dest);
-            return Ok(());
+            return self.sync_columns(table).await;
         }
 
         info!("creating ClickHouse table {}", dest);
@@ -74,6 +74,35 @@ impl<'a> SchemaManager<'a> {
             .map_err(|e| AppError::Schema(format!("failed to create table {}: {}", dest, e)))?;
 
         info!("created ClickHouse table {}", dest);
+        Ok(())
+    }
+
+    async fn sync_columns(&self, table: &TableConfig) -> Result<(), AppError> {
+        let dest = table.dest_name();
+        let pg_cols = self.pg.get_columns(&table.source).await?;
+        let ch_col_names: HashSet<String> = self.ch.get_columns(dest).await?.into_iter().collect();
+
+        let order_by_cols: HashSet<&str> = table.ch_order_by().iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        for col in &pg_cols {
+            if ch_col_names.contains(&col.name) {
+                continue;
+            }
+
+            if order_by_cols.contains(col.name.as_str()) {
+                warn!("new column {} is an ORDER BY key in {}, cannot add after creation", col.name, dest);
+                continue;
+            }
+
+            let ch_type = pg_to_ch_type(&col.pg_type, col.is_nullable, col.numeric_precision, col.numeric_scale);
+            let ddl = format!("ALTER TABLE `{}` ADD COLUMN `{}` {}", dest, col.name, ch_type);
+            self.ch.execute(&ddl).await
+                .map_err(|e| AppError::Schema(format!("failed to add column {} to {}: {}", col.name, dest, e)))?;
+            info!("added column {} ({}) to {}", col.name, ch_type, dest);
+        }
+
         Ok(())
     }
 }

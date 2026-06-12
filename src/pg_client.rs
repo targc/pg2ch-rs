@@ -4,7 +4,7 @@ use rustls::ClientConfig;
 use serde_json::{Map, Value};
 use tokio_postgres::{types::Type, Client, NoTls, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
-use tracing::warn;
+use tracing::{error, warn};
 
 pub struct ColumnInfo {
     pub name: String,
@@ -24,11 +24,21 @@ impl PgClient {
         let client = if ssl {
             let tls = MakeRustlsConnect::new(build_tls_config());
             let (client, conn) = tokio_postgres::connect(url, tls).await?;
-            tokio::spawn(async move { if let Err(e) = conn.await { tracing::error!("{}", e); } });
+            tokio::spawn(async move {
+                if let Err(e) = conn.await {
+                    error!("postgres connection lost: {}", e);
+                    std::process::exit(1);
+                }
+            });
             client
         } else {
             let (client, conn) = tokio_postgres::connect(url, NoTls).await?;
-            tokio::spawn(async move { if let Err(e) = conn.await { tracing::error!("{}", e); } });
+            tokio::spawn(async move {
+                if let Err(e) = conn.await {
+                    error!("postgres connection lost: {}", e);
+                    std::process::exit(1);
+                }
+            });
             client
         };
         Ok(Self { client })
