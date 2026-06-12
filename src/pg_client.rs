@@ -2,7 +2,16 @@ use crate::error::AppError;
 use rust_decimal::Decimal;
 use rustls::ClientConfig;
 use serde_json::{Map, Value};
-use tokio_postgres::{types::Type, Client, NoTls, Row};
+use tokio_postgres::{types::{FromSql, Type}, Client, NoTls, Row};
+
+/// Reads any PG type as UTF-8 string — needed because String's FromSql rejects enum OIDs.
+struct RawString(String);
+impl<'a> FromSql<'a> for RawString {
+    fn from_sql(_: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        Ok(RawString(std::str::from_utf8(raw)?.to_string()))
+    }
+    fn accepts(_: &Type) -> bool { true }
+}
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::{error, warn};
 
@@ -191,11 +200,12 @@ fn col_to_json(row: &Row, idx: usize, typ: &Type) -> Value {
             .unwrap_or(Value::Null),
 
         _ => {
-            // Enums and other custom types are representable as strings.
-            row.try_get::<_, Option<String>>(idx)
+            // Enums and other custom types: read raw bytes as UTF-8.
+            // Can't use String directly — its FromSql rejects non-TEXT OIDs.
+            row.try_get::<_, Option<RawString>>(idx)
                 .ok()
                 .flatten()
-                .map(Value::String)
+                .map(|v| Value::String(v.0))
                 .unwrap_or_else(|| {
                     warn!("unsupported postgres type {:?} at index {}, returning null", typ, idx);
                     Value::Null
