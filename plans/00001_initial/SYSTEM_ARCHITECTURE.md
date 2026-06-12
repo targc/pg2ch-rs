@@ -36,8 +36,7 @@ Loads and validates `config.yaml`. Produces a typed `Config` struct used through
 ```
 Config
 ├── interval_ms
-├── query_batch_size
-├── upsert_batch_size
+├── batch_size
 ├── source.connection_url
 ├── destination.connection_url
 └── tables[]
@@ -95,7 +94,7 @@ loop {
     3. If batch is empty → break (table is caught up)
     4. INSERT batch into ClickHouse
     5. Update cursor in CursorStore to last row's cursor values
-    6. If batch < query_batch_size → break (last page)
+    6. If batch < batch_size → break (last page)
     7. Else → continue (more pages)
 }
 ```
@@ -105,12 +104,11 @@ loop {
 SELECT * FROM source_table
 WHERE (cursor_col1, cursor_col2) > ($last1, $last2)
 ORDER BY cursor_col1, cursor_col2
-LIMIT $query_batch_size
+LIMIT $batch_size
 ```
 
 **Load** (ClickHouse)
-- Rows are split into chunks of `upsert_batch_size`.
-- Each chunk is inserted via `INSERT INTO dest_table VALUES (...)`.
+- The batch is inserted via `INSERT INTO dest_table VALUES (...)`.
 - ClickHouse `ReplacingMergeTree` handles deduplication by primary key.
 
 ---

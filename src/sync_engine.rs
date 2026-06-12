@@ -46,8 +46,7 @@ impl SyncEngine {
                 pg: Arc::clone(&self.pg),
                 ch: Arc::clone(&self.ch),
                 cursors: Arc::clone(&self.cursors),
-                query_batch_size: self.config.query_batch_size,
-                upsert_batch_size: self.config.upsert_batch_size,
+                batch_size: self.config.batch_size,
             };
             handles.push(tokio::spawn(async move {
                 (table_name, worker.run().await)

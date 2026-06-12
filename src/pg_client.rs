@@ -181,8 +181,15 @@ fn col_to_json(row: &Row, idx: usize, typ: &Type) -> Value {
             .unwrap_or(Value::Null),
 
         _ => {
-            warn!("unsupported postgres type {:?} at index {}, returning null", typ, idx);
-            Value::Null
+            // Enums and other custom types are representable as strings.
+            row.try_get::<_, Option<String>>(idx)
+                .ok()
+                .flatten()
+                .map(Value::String)
+                .unwrap_or_else(|| {
+                    warn!("unsupported postgres type {:?} at index {}, returning null", typ, idx);
+                    Value::Null
+                })
         }
     }
 }

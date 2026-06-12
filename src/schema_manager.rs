@@ -42,12 +42,20 @@ impl<'a> SchemaManager<'a> {
             )));
         }
 
+        let order_by_cols: std::collections::HashSet<&str> = table.ch_order_by().iter()
+            .map(|s| s.as_str())
+            .collect();
+
         let col_defs: Vec<String> = columns.iter()
-            .map(|c| format!(
-                "    `{}` {}",
-                c.name,
-                pg_to_ch_type(&c.pg_type, c.is_nullable, c.numeric_precision, c.numeric_scale)
-            ))
+            .map(|c| {
+                // ORDER BY columns must be non-nullable in ClickHouse
+                let nullable = c.is_nullable && !order_by_cols.contains(c.name.as_str());
+                format!(
+                    "    `{}` {}",
+                    c.name,
+                    pg_to_ch_type(&c.pg_type, nullable, c.numeric_precision, c.numeric_scale)
+                )
+            })
             .collect();
 
         let order_by = table.ch_order_by().iter()

@@ -78,7 +78,7 @@ tick
  └── page < 1000 → done, wait interval_ms
 ```
 
-The batch sizes are configurable (`query_batch_size`, `upsert_batch_size`).
+The batch size is configurable (`batch_size`).
 
 ---
 

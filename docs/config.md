@@ -8,15 +8,13 @@ Config is a YAML file. See `config.example.yaml` for a full example.
 
 ```yaml
 interval_ms: 5000
-query_batch_size: 1000
-upsert_batch_size: 1000
+batch_size: 1000
 ```
 
 | Field | Description |
 |-------|-------------|
 | `interval_ms` | How long to wait (in milliseconds) **after** each sync cycle finishes before starting the next one. This is not a fixed-interval cron — the next tick starts only after the current one fully completes. |
-| `query_batch_size` | How many rows to fetch from PostgreSQL per SELECT. Lower = less memory, more round-trips. |
-| `upsert_batch_size` | How many rows to insert into ClickHouse per INSERT. Can be the same as `query_batch_size`. |
+| `batch_size` | How many rows to fetch from PostgreSQL and insert into ClickHouse per batch. Lower = less memory, more round-trips. |
 
 ---
 

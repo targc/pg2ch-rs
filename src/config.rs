@@ -6,8 +6,7 @@ use crate::error::AppError;
 #[derive(Deserialize)]
 pub struct Config {
     pub interval_ms: u64,
-    pub query_batch_size: usize,
-    pub upsert_batch_size: usize,
+    pub batch_size: usize,
     pub source: DbConfig,
     pub destination: DbConfig,
     pub tables: Vec<TableConfig>,

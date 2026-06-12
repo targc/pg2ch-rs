@@ -1,6 +1,5 @@
 interval_ms: 3000
-query_batch_size: 1000
-upsert_batch_size: 1000
+batch_size: 1000
 
 source:
   connection_url: postgres://pg2ch:pg2ch@localhost:5432/pg2ch

@@ -139,17 +139,17 @@ TableWorker::run(table)
      ├─ cursors.get(table.source)
      │   └─ MISSING → fatal error, process exits
      │
-     ├─ pg.fetch_batch(table, cursor, query_batch_size)
+     ├─ pg.fetch_batch(table, cursor, batch_size)
      │   └─ FAIL → log error, break (skip table this tick)
      │
      ├─ if rows.is_empty() → break           ← table is caught up
      │
-     ├─ ch.insert_batch(table.dest, rows, upsert_batch_size)
+     ├─ ch.insert_batch(table.dest, rows)
      │   └─ FAIL → log error, break          ← cursor NOT advanced
      │
      ├─ cursors.set(table.source, last_row.cursor_values())
      │
-     └─ if rows.len() < query_batch_size → break   ← last page reached
+     └─ if rows.len() < batch_size → break           ← last page reached
 ```
 
 ---
@@ -164,7 +164,7 @@ SELECT *
 FROM   {source_table}
 WHERE  (updated_at, id) > ($1, $2)
 ORDER BY updated_at ASC, id ASC
-LIMIT  {query_batch_size}
+LIMIT  {batch_size}
 ```
 
 On first run (empty CH table), cursor values are `(MIN, MIN)` so the `WHERE` clause matches all rows.
@@ -173,11 +173,10 @@ On first run (empty CH table), cursor values are `(MIN, MIN)` so the `WHERE` cla
 
 ## 5. ClickHouse Insert
 
-Rows are chunked into `upsert_batch_size` and inserted sequentially:
+The batch is inserted as a single statement:
 
 ```
-for chunk in rows.chunks(upsert_batch_size):
-    INSERT INTO {dest_table} (col1, col2, ...) VALUES (...)
+INSERT INTO {dest_table} (col1, col2, ...) VALUES (...)
 ```
 
 ClickHouse `ReplacingMergeTree` deduplicates by primary key asynchronously.

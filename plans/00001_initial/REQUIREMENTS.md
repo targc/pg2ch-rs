@@ -24,7 +24,7 @@ Each table has one or more cursor columns (e.g., `updated_at`, `id`). The servic
 SELECT * FROM source_table
 WHERE (updated_at, id) > ($last_updated_at, $last_id)
 ORDER BY updated_at, id
-LIMIT $query_batch_size
+LIMIT $batch_size
 ```
 
 Cursor state is kept **in-memory**. Lifecycle:
@@ -43,8 +43,7 @@ ClickHouse is the source of truth on cold start; no state file needed.
 
 ```yaml
 interval_ms: 5000        # wait between sync cycles (after current cycle finishes)
-query_batch_size: 1000   # rows per SELECT from PostgreSQL
-upsert_batch_size: 1000  # rows per INSERT into ClickHouse
+batch_size: 1000         # rows per SELECT/INSERT batch
 
 source:
   connection_url: postgres://user:pass@host/db

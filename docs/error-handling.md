@@ -17,14 +17,12 @@
 When a ClickHouse insert fails, the cursor is **not advanced**. The next tick re-fetches and retries from the last good position.
 
 ```rust
-for chunk in rows.chunks(self.upsert_batch_size) {
-    if let Err(e) = self.ch.insert_rows(table.dest_name(), chunk).await {
-        error!("failed to insert into {}: {}", table.dest_name(), e);
-        return Ok(()); // cursor not advanced; retried next tick
-    }
+if let Err(e) = self.ch.insert_rows(table.dest_name(), &rows).await {
+    error!("failed to insert into {}: {}", table.dest_name(), e);
+    return Ok(()); // cursor not advanced; retried next tick
 }
 
-// only reached if ALL chunks succeeded
+// only reached if insert succeeded
 cursors.set(&table.source, new_cursor);
 ```
 
@@ -32,19 +30,17 @@ cursors.set(&table.source, new_cursor);
 
 ```
 tick N:
-  fetch 3000 rows → chunk 1 (ok) → chunk 2 (ok) → chunk 3 (FAIL)
+  fetch 1000 rows → insert (FAIL)
   → log error, return early
   → cursor stays at old position
 
 tick N+1:
-  fetch same 3000 rows (cursor unchanged)
-  → chunk 1 re-inserted → chunk 2 re-inserted → chunk 3 (ok)
+  fetch same 1000 rows (cursor unchanged)
+  → insert (ok)
   → cursor advances
 ```
 
-**Is re-inserting already-synced chunks a problem?**
-
-No — `ReplacingMergeTree` deduplicates by `primary_key`. Re-inserted rows replace themselves. You may see temporary duplicates until ClickHouse runs a background merge, which is why queries use `SELECT ... FINAL`.
+Since each batch is fetched and inserted as a single unit, there are no partial inserts. On failure the entire batch is retried next tick. `ReplacingMergeTree` deduplicates by `primary_key`, so re-inserted rows replace themselves.
 
 ---
 

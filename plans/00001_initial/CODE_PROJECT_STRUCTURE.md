@@ -34,8 +34,7 @@ pg2ch-rs/
 #[derive(Deserialize)]
 pub struct Config {
     pub interval_ms: u64,
-    pub query_batch_size: usize,
-    pub upsert_batch_size: usize,
+    pub batch_size: usize,
     pub source: DbConfig,
     pub destination: DbConfig,
     pub tables: Vec<TableConfig>,
@@ -129,8 +128,7 @@ pub struct TableWorker<'a> {
     pg: &'a PgClient,
     ch: &'a ChClient,
     cursors: Arc<Mutex<CursorStore>>,
-    query_batch_size: usize,
-    upsert_batch_size: usize,
+    batch_size: usize,
 }
 
 impl TableWorker<'_> {

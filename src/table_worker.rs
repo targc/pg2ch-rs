@@ -14,8 +14,7 @@ pub struct TableWorker {
     pub pg: Arc<PgClient>,
     pub ch: Arc<ChClient>,
     pub cursors: Arc<Mutex<CursorStore>>,
-    pub query_batch_size: usize,
-    pub upsert_batch_size: usize,
+    pub batch_size: usize,
 }
 
 impl TableWorker {
@@ -35,7 +34,7 @@ impl TableWorker {
                     &table.source,
                     &table.cursors,
                     &cursor_values,
-                    self.query_batch_size,
+                    self.batch_size,
                 )
                 .await
             {
@@ -52,20 +51,27 @@ impl TableWorker {
 
             let row_count = rows.len();
 
-            for chunk in rows.chunks(self.upsert_batch_size) {
-                if let Err(e) = self.ch.insert_rows(table.dest_name(), chunk).await {
-                    error!("failed to insert into {}: {}", table.dest_name(), e);
-                    return Ok(()); // cursor not advanced; retried next tick
-                }
+            if let Err(e) = self.ch.insert_rows(table.dest_name(), &rows).await {
+                error!("failed to insert into {}: {}", table.dest_name(), e);
+                return Ok(()); // cursor not advanced; retried next tick
             }
 
             // Advance cursor to last row's values
             let last_row = rows.last().unwrap();
-            cursor_values = table
+            let new_cursor: Vec<Value> = table
                 .cursors
                 .iter()
                 .map(|c| last_row.get(c).cloned().unwrap_or(Value::Null))
                 .collect();
+
+            if new_cursor.iter().any(|v| v.is_null()) {
+                error!(
+                    "cursor column has NULL value in {}, stopping sync to avoid silent stall. cursor: {:?}",
+                    table.source, new_cursor
+                );
+                return Ok(());
+            }
+            cursor_values = new_cursor;
 
             {
                 let mut store = self.cursors.lock().await;
@@ -74,7 +80,7 @@ impl TableWorker {
 
             info!("synced {} rows from {}", row_count, table.source);
 
-            if row_count < self.query_batch_size {
+            if row_count < self.batch_size {
                 break; // last page
             }
         }

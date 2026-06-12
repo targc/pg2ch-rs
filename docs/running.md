@@ -31,8 +31,7 @@ cat config.yaml | cargo run
 ```bash
 cargo run << 'EOF'
 interval_ms: 5000
-query_batch_size: 1000
-upsert_batch_size: 1000
+batch_size: 1000
 source:
   connection_url: postgres://user:pass@localhost/mydb
 destination:
