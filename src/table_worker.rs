@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     ch_client::ChClient, config::TableConfig, cursor_store::CursorStore, error::AppError,
@@ -18,14 +18,20 @@ pub struct TableWorker {
 }
 
 impl TableWorker {
-    pub async fn run(&self) -> Result<(), AppError> {
+    /// Returns the number of rows synced this tick, so `SyncEngine` can spot a table
+    /// that has stopped making progress.
+    pub async fn run(&self) -> Result<usize, AppError> {
         let table = &self.table;
 
         let mut cursor_values = {
             let store = self.cursors.lock().await;
             store.get(&table.source)?.clone()
         };
-        info!("syncing, table: {}, cursor: {:?}", table.dest_name(), cursor_values);
+        // Per-tick and per-table, so at `info` this drowns out everything that matters
+        // (restarts included). The `synced N rows` line below reports actual progress.
+        debug!("syncing, table: {}, cursor: {:?}", table.dest_name(), cursor_values);
+
+        let mut synced = 0usize;
 
         loop {
             let rows = match self
@@ -41,7 +47,7 @@ impl TableWorker {
                 Ok(r) => r,
                 Err(e) => {
                     error!("failed to fetch batch from {}: {}", table.source, e);
-                    return Ok(());
+                    return Ok(synced);
                 }
             };
 
@@ -53,7 +59,7 @@ impl TableWorker {
 
             if let Err(e) = self.ch.insert_rows(table.dest_name(), &rows).await {
                 error!("failed to insert into {}: {}", table.dest_name(), e);
-                return Ok(()); // cursor not advanced; retried next tick
+                return Ok(synced); // cursor not advanced; retried next tick
             }
 
             // Advance cursor to last row's values
@@ -69,7 +75,7 @@ impl TableWorker {
                     "cursor column has NULL value in {}, stopping sync to avoid silent stall. cursor: {:?}",
                     table.source, new_cursor
                 );
-                return Ok(());
+                return Ok(synced);
             }
             cursor_values = new_cursor;
 
@@ -78,6 +84,7 @@ impl TableWorker {
                 store.set(&table.source, cursor_values.clone());
             }
 
+            synced += row_count;
             info!("synced {} rows from {}", row_count, table.source);
 
             if row_count < self.batch_size {
@@ -85,6 +92,6 @@ impl TableWorker {
             }
         }
 
-        Ok(())
+        Ok(synced)
     }
 }

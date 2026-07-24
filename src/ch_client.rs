@@ -1,5 +1,6 @@
 use clickhouse_rs::Pool;
 use serde_json::{Map, Value as JsonValue};
+use tracing::warn;
 
 use crate::error::AppError;
 
@@ -145,11 +146,28 @@ impl ChClient {
                 // as `Option<String>` therefore yields Err -> None -> a bogus NULL cursor,
                 // which freezes the table (`WHERE col > NULL` never matches). Try `String`
                 // first, then `Option<String>`, so both column kinds read correctly.
-                row.get::<String, _>(c.as_str())
-                    .ok()
-                    .or_else(|| row.get::<Option<String>, _>(c.as_str()).ok().flatten())
-                    .map(JsonValue::String)
-                    .unwrap_or(JsonValue::Null)
+                match row.get::<String, _>(c.as_str()) {
+                    Ok(s) => JsonValue::String(s),
+                    Err(as_string) => match row.get::<Option<String>, _>(c.as_str()) {
+                        Ok(Some(s)) => JsonValue::String(s),
+                        Ok(None) => {
+                            warn!(
+                                "cursor column `{}` is NULL in the newest row of {}; \
+                                 this table cannot sync until it holds a value",
+                                c, table
+                            );
+                            JsonValue::Null
+                        }
+                        Err(as_option) => {
+                            warn!(
+                                "cursor column `{}` of {} could not be decoded, falling back to NULL \
+                                 (as String: {} | as Option<String>: {})",
+                                c, table, as_string, as_option
+                            );
+                            JsonValue::Null
+                        }
+                    },
+                }
             })
             .collect();
 

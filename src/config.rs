@@ -7,9 +7,22 @@ use crate::error::AppError;
 pub struct Config {
     pub interval_ms: u64,
     pub batch_size: usize,
+    /// Warn when a table has synced 0 rows for this many consecutive ticks, then
+    /// again every that many ticks. Catches a frozen cursor, which is otherwise
+    /// indistinguishable from an idle table. `0` disables the warning.
+    ///
+    /// Note this fires for genuinely static tables too (lookup tables that simply
+    /// never change) — tune it per deployment or set `0` if that noise isn't wanted.
+    #[serde(default = "default_stall_warn_ticks")]
+    pub stall_warn_ticks: u64,
     pub source: DbConfig,
     pub destination: DbConfig,
     pub tables: Vec<TableConfig>,
+}
+
+/// 1200 ticks — one hour at the default `interval_ms: 3000`.
+fn default_stall_warn_ticks() -> u64 {
+    1200
 }
 
 #[derive(Deserialize)]

@@ -14,7 +14,7 @@ use error::AppError;
 use pg_client::PgClient;
 use schema_manager::SchemaManager;
 use sync_engine::SyncEngine;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -38,6 +38,17 @@ async fn main() -> Result<(), AppError> {
         .with_writer(std::io::stderr)
         .init();
 
+    // Identify this process run. Restarts are otherwise only visible as a gap in
+    // log timestamps; `grep "sync engine starting"` gives an exact restart history.
+    // BUILD_SHA is read at runtime so it can be set on the container without a rebuild;
+    // CI already tags images with the short commit SHA.
+    info!(
+        "sync engine starting, version: {}, build: {}, pid: {}",
+        env!("CARGO_PKG_VERSION"),
+        std::env::var("BUILD_SHA").unwrap_or_else(|_| "unknown".to_string()),
+        std::process::id(),
+    );
+
     let config = config::load_from_arg()?;
 
     info!("connecting to PostgreSQL");
@@ -53,8 +64,17 @@ async fn main() -> Result<(), AppError> {
     let mut cursors = CursorStore::default();
     for table in &config.tables {
         let values = ch.fetch_last_cursor(table.dest_name(), &table.cursors).await?;
+        // A NULL here is never legitimate: every later query becomes
+        // `WHERE (cursor) > (NULL, ...)`, which matches nothing, so the table stops
+        // syncing and cannot recover on its own. Say so loudly at the moment it happens.
+        if values.iter().any(|v| v.is_null()) {
+            warn!(
+                "initial cursor for {} contains NULL: {:?} — this table will not sync",
+                table.source, values
+            );
+        }
+        info!("cursor ready for {}: {:?}", table.source, values);
         cursors.set(&table.source, values);
-        info!("cursor ready for {}", table.source);
     }
 
     info!("starting sync engine");

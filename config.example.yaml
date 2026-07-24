@@ -1,6 +1,12 @@
 interval_ms: 5000
 batch_size: 1000
 
+# Warn when a table syncs 0 rows for this many consecutive ticks, then again
+# every that many ticks. Catches a frozen cursor, which otherwise looks exactly
+# like an idle table. Static lookup tables will trip it too — raise it, or set 0
+# to disable. Optional; defaults to 1200 (one hour at interval_ms: 3000).
+stall_warn_ticks: 1200
+
 source:
   connection_url: postgres://user:pass@localhost/mydb
 
