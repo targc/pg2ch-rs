@@ -137,9 +137,17 @@ impl ChClient {
         let row = block.rows().next().unwrap();
         let values = cursor_cols.iter()
             .map(|c| {
-                row.get::<Option<String>, _>(c.as_str())
+                // A cursor column may be Nullable in ClickHouse or not — it mirrors the PG
+                // column unless it's an ORDER BY key, which is forced non-nullable. That
+                // decides how `toString(...)` comes back, and clickhouse-rs is strict about
+                // it: `Option<String>::from_sql` decodes ONLY a Nullable column and errors on
+                // a non-Nullable one, whatever value it holds. Reading a non-Nullable column
+                // as `Option<String>` therefore yields Err -> None -> a bogus NULL cursor,
+                // which freezes the table (`WHERE col > NULL` never matches). Try `String`
+                // first, then `Option<String>`, so both column kinds read correctly.
+                row.get::<String, _>(c.as_str())
                     .ok()
-                    .flatten()
+                    .or_else(|| row.get::<Option<String>, _>(c.as_str()).ok().flatten())
                     .map(JsonValue::String)
                     .unwrap_or(JsonValue::Null)
             })
